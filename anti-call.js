@@ -8,7 +8,7 @@ const Callupdate = async (json, sock) => {
             await sock.rejectCall(id.id, id.from);
 
             // Image URL to be sent as caption
-            const imageUrl = 'https://i.ibb.co/R7v00yc/Whats-App-Image-2025-01-20-at-08-54-38-0baab1a6.jpg';
+            const imageUrl = 'https://i.ibb.co/YBPtB5BB/2c20f2e5bfc375e0dff4568d2659617f.jpg';
 
             // Prepare the message context
             const messageContext = {
@@ -31,7 +31,7 @@ const Callupdate = async (json, sock) => {
                   isForwarded: true,
                   forwardedNewsletterMessageInfo: {
                      newsletterJid: '120363286758767913@newsletter',
-                     newsletterName: 'KING RAVI MD FORWARD',
+                     newsletterName: 'DEXTER CALL WARNING  FORWARD YOU',
                      serverMessageId: 143,
                   },
                },
