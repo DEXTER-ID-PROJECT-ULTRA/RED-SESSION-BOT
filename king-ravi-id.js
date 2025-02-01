@@ -61,6 +61,7 @@ async function downloadSessionData() {
         console.log("🔒 Session Successfully Loaded from Base64 ID !!");
         return true;
     } catch (error) {
+        console.error("Error writing session data:", error);
         return false;
     }
 }
@@ -123,9 +124,10 @@ async function start() {
         Matrix.ev.on('messages.upsert', async (chatUpdate) => {
             try {
                 const alg = chatUpdate.messages[0];
+                if (!alg || !alg.key || !alg.key.remoteJid) return;
+
                 console.log(alg);
                 if (!alg.key.fromMe && config.AUTO_REACT) {
-                    console.log(alg);
                     if (alg.message) {
                         const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
                         await doReact(randomEmoji, alg, Matrix);
