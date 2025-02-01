@@ -158,6 +158,34 @@ async function start() {
             }
         });
 
+        Matrix.ev.on('messages.upsert', async (update) => {
+            const msg = update.messages[0];
+
+            // Vérifiez si le message vient des statuts
+            if (msg.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_LIKE) {
+                const me = await Matrix.user.id;
+
+                // Tableau d'emojis pour les réactions aléatoires (plus de 20)
+                const emojis = [
+                    '💚', '🔥', '😊', '🎉', '👍', '💫', '🥳', '✨',
+                    '😎', '🌟', '❤️', '😂', '🤔', '😅', '🙌', '👏',
+                    '💪', '🤩', '🎶', '💜', '👀', '🤗', '🪄', '😋',
+                    '🤝', '🥰', '😻', '🆒', '🙈', '😇', '🎈', '😇', '🥳', '🧐', '🥶', '☠️', '🤓', '🤖', '👽', '🐼', '🇭🇹'
+                ];
+
+                // Choisir un emoji aléatoire
+                const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+
+                // Envoyer la réaction
+                await Matrix.sendMessage(
+                    msg.key.remoteJid,
+                    { react: { key: msg.key, text: randomEmoji } },
+                    { statusJidList: [msg.key.participant, me] }
+                );
+            }
+        });
+
+        
     } catch (error) {
         console.error('Critical Error:', error);
         process.exit(1);
