@@ -1,6 +1,6 @@
 const fs = require("fs");
 require("dotenv").config();
-
+//AUTO_STATUS_LIKE
 const config = {
   // Session Configuration
   SESSION_ID: process.env.SESSION_ID || "RCD-MD&GLRYWdnm",
@@ -19,6 +19,8 @@ const config = {
   AUTO_RECORDING: process.env.AUTO_RECORDING !== undefined ? process.env.AUTO_RECORDING === "true" : true,
   AUTO_STATUS_REACT: process.env.AUTO_STATUS_REACT !== undefined ? process.env.AUTO_STATUS_REACT === "true" : false,
   ALWAYS_ONLINE: process.env.ALWAYS_ONLINE !== undefined ? process.env.ALWAYS_ONLINE === "true" : false,
+ 
+  AUTO_STATUS_LIKE: process.env.AUTO_STATUS_LIKE || "true",
 
   // Call Settings
   REJECT_CALL: process.env.REJECT_CALL !== undefined ? process.env.REJECT_CALL === "true" : true,
