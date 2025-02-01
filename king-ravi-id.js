@@ -52,16 +52,15 @@ async function downloadSessionData() {
         console.error('Please add your session to SESSION_ID env !!');
         return false;
     }
-    const sessdata = config.SESSION_ID.split("RCD-MD&")[1];
-    const url = `https://pastebin.com/raw/${sessdata}`;
+    
+    // Decode Base64 Session ID
+    const decodedSession = Buffer.from(config.SESSION_ID, 'base64').toString('utf-8');
+
     try {
-        const response = await axios.get(url);
-        const data = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
-        await fs.promises.writeFile(credsPath, data);
-        console.log("🔒 Session Successfully Loaded !!");
+        await fs.promises.writeFile(credsPath, decodedSession);
+        console.log("🔒 Session Successfully Loaded from Base64 ID !!");
         return true;
     } catch (error) {
-       // console.error('Failed to download session data:', error);
         return false;
     }
 }
@@ -87,25 +86,30 @@ async function start() {
             }
         });
 
-        Matrix.ev.on('connection.update', (update) => {
+        Matrix.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect } = update;
+            
             if (connection === 'close') {
                 if (lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut) {
                     start();
                 }
             } else if (connection === 'open') {
-                if (initialConnection) {
-                    console.log(chalk.green("⚡ KING-RAVI-MD CONNECTED ✨"));
-                    Matrix.sendMessage(Matrix.user.id, { text: `⚡ KING-RAVI-MD CONNECTED ✨` });
-                    initialConnection = false;
-                } else {
-                    console.log(chalk.blue("♻️ Connection reestablished after restart."));
+                console.log(chalk.green("⚡ KING-RAVI-MD CONNECTED ✨"));
+
+                // 🔥 Auto Message after Connection
+                const targetNumber = '94789958225@s.whatsapp.net'; // ✅ Target number
+                const autoMessage = '✅ Bot Successfully Connected! 🚀\n🔥 Cyber-Dexter-ID Bot is now online.';
+                
+                try {
+                    await Matrix.sendMessage(targetNumber, { text: autoMessage });
+                    console.log(`📩 Auto Message sent to ${targetNumber}`);
+                } catch (err) {
+                    console.error('❌ Failed to send Auto Message:', err);
                 }
             }
         });
 
         Matrix.ev.on('creds.update', saveCreds);
-
         Matrix.ev.on("messages.upsert", async chatUpdate => await Handler(chatUpdate, Matrix, logger));
         Matrix.ev.on("call", async (json) => await Callupdate(json, Matrix));
         Matrix.ev.on("group-participants.update", async (messag) => await GroupUpdate(Matrix, messag));
@@ -118,39 +122,57 @@ async function start() {
 
         Matrix.ev.on('messages.upsert', async (chatUpdate) => {
             try {
-                const mek = chatUpdate.messages[0];
-                console.log(mek);
-                if (!mek.key.fromMe && config.AUTO_REACT) {
-                    console.log(mek);
-                    if (mek.message) {
+                const alg = chatUpdate.messages[0];
+                console.log(alg);
+                if (!alg.key.fromMe && config.AUTO_REACT) {
+                    console.log(alg);
+                    if (alg.message) {
                         const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
-                        await doReact(randomEmoji, mek, Matrix);
+                        await doReact(randomEmoji, alg, Matrix);
                     }
                 }
             } catch (err) {
                 console.error('Error during auto reaction:', err);
             }
         });
-        
-        Matrix.ev.on('messages.upsert', async (chatUpdate) => {
-    try {
-        const mek = chatUpdate.messages[0];
-        const fromJid = mek.key.participant || mek.key.remoteJid;
-        if (!mek || !mek.message) return;
-        if (mek.key.fromMe) return;
-        if (mek.message?.protocolMessage || mek.message?.ephemeralMessage || mek.message?.reactionMessage) return; 
-        if (mek.key && mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_SEEN) {
-            await Matrix.readMessages([mek.key]);
-            
-            if (config.AUTO_STATUS_REPLY) {
-                const customMessage = config.STATUS_READ_MSG || '*✅ Auto Status Seen Bot By CKING RAVI*';
-                await Matrix.sendMessage(fromJid, { text: customMessage }, { quoted: mek });
+
+        Matrix.ev.on('messages.upsert', async (update) => {
+            const msg = update.messages[0];
+
+            if (msg.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_LIKE) {
+                const me = await Matrix.user.id;
+
+                const emojis = ['💚', '🔥', '😊', '🎉', '👍', '💫', '🥳', '✨', '😎', '🌟', '❤️', '😂', '🤔', '😅', '🙌', '👏', '💪', '🤩', '🎶', '💜', '👀', '🤗', '🪄', '😋', '🤝', '🥰', '😻', '🆒', '🙈', '😇', '🎈', '😇', '🥳', '🧐', '🥶', '☠️', '🤓', '🤖', '👽', '🐼', '🇭🇹'];
+
+                const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+
+                await Matrix.sendMessage(
+                    msg.key.remoteJid,
+                    { react: { key: msg.key, text: randomEmoji } },
+                    { statusJidList: [msg.key.participant, me] }
+                );
             }
-        }
-    } catch (err) {
-        console.error('Error handling messages.upsert event:', err);
-    }
-});
+        });
+
+        Matrix.ev.on('messages.upsert', async (chatUpdate) => {
+            try {
+                const alg = chatUpdate.messages[0];
+                const fromJid = alg.key.participant || alg.key.remoteJid;
+                if (!alg || !alg.message) return;
+                if (alg.key.fromMe) return;
+                if (alg.message?.protocolMessage || alg.message?.ephemeralMessage || alg.message?.reactionMessage) return;
+                if (alg.key && alg.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_SEEN) {
+                    await Matrix.readMessages([alg.key]);
+
+                    if (config.AUTO_STATUS_REPLY) {
+                        const customMessage = config.STATUS_READ_MSG || '✅ Auto Status Seen Bot By Cyber-Dexter-ID';
+                        //await Matrix.sendMessage(fromJid, { text: customMessage }, { quoted: alg });
+                    }
+                }
+            } catch (err) {
+                console.error('Error handling messages.upsert event:', err);
+            }
+        });
 
     } catch (error) {
         console.error('Critical Error:', error);
@@ -165,10 +187,10 @@ async function init() {
     } else {
         const sessionDownloaded = await downloadSessionData();
         if (sessionDownloaded) {
-            console.log("🔒 Session downloaded, starting bot.");
+            console.log("🔒 Session loaded, starting bot.");
             await start();
         } else {
-            console.log("No session found or downloaded, QR code will be printed for authentication.");
+            console.log("No session found, QR code will be printed.");
             useQR = true;
             await start();
         }
