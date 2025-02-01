@@ -114,22 +114,6 @@ async function start() {
             Matrix.public = false;
         }
 
-        Matrix.ev.on('messages.upsert', async (chatUpdate) => {
-            try {
-                const alg = chatUpdate.messages[0];
-                if (!alg || !alg.key || !alg.key.remoteJid) return; // Skip if undefined
-                
-                if (!alg.key.fromMe && config.AUTO_REACT) {
-                    if (alg.message) {
-                        const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
-                        await doReact(randomEmoji, alg, Matrix);
-                    }
-                }
-            } catch (err) {
-                console.error('Error during auto reaction:', err);
-            }
-        });
-
         Matrix.ev.on('messages.upsert', async (update) => {
             const msg = update.messages[0];
 
