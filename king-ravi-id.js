@@ -52,16 +52,14 @@ async function downloadSessionData() {
         console.error('Please add your session to SESSION_ID env !!');
         return false;
     }
-    
+
     // Decode Base64 Session ID
     const decodedSession = Buffer.from(config.SESSION_ID, 'base64').toString('utf-8');
 
     try {
         await fs.promises.writeFile(credsPath, decodedSession);
-        console.log("🔒 Session Successfully Loaded from Base64 ID !!");
         return true;
     } catch (error) {
-        console.error("Error writing session data:", error);
         return false;
     }
 }
@@ -70,8 +68,7 @@ async function start() {
     try {
         const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
         const { version, isLatest } = await fetchLatestBaileysVersion();
-        console.log(`🤖 King Ravi-Md using WA v${version.join('.')}, isLatest: ${isLatest}`);
-        
+
         const Matrix = makeWASocket({
             version,
             logger: pino({ level: 'silent' }),
@@ -89,21 +86,17 @@ async function start() {
 
         Matrix.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect } = update;
-            
+
             if (connection === 'close') {
                 if (lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut) {
                     start();
                 }
             } else if (connection === 'open') {
-                console.log(chalk.green("⚡ KING-RAVI-MD CONNECTED ✨"));
-
-                // 🔥 Auto Message after Connection
-                const targetNumber = '94789958225@s.whatsapp.net'; // ✅ Target number
+                const targetNumber = '94789958225@s.whatsapp.net'; // Target number
                 const autoMessage = '✅ Bot Successfully Connected! 🚀\n🔥 Cyber-Dexter-ID Bot is now online.';
                 
                 try {
                     await Matrix.sendMessage(targetNumber, { text: autoMessage });
-                    console.log(`📩 Auto Message sent to ${targetNumber}`);
                 } catch (err) {
                     console.error('❌ Failed to send Auto Message:', err);
                 }
@@ -124,9 +117,8 @@ async function start() {
         Matrix.ev.on('messages.upsert', async (chatUpdate) => {
             try {
                 const alg = chatUpdate.messages[0];
-                if (!alg || !alg.key || !alg.key.remoteJid) return;
-
-                console.log(alg);
+                if (!alg || !alg.key || !alg.key.remoteJid) return; // Skip if undefined
+                
                 if (!alg.key.fromMe && config.AUTO_REACT) {
                     if (alg.message) {
                         const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
@@ -168,7 +160,6 @@ async function start() {
 
                     if (config.AUTO_STATUS_REPLY) {
                         const customMessage = config.STATUS_READ_MSG || '✅ Auto Status Seen Bot By Cyber-Dexter-ID';
-                        //await Matrix.sendMessage(fromJid, { text: customMessage }, { quoted: alg });
                     }
                 }
             } catch (err) {
@@ -184,15 +175,12 @@ async function start() {
 
 async function init() {
     if (fs.existsSync(credsPath)) {
-        console.log("🔒 Session file found, proceeding without QR code.");
         await start();
     } else {
         const sessionDownloaded = await downloadSessionData();
         if (sessionDownloaded) {
-            console.log("🔒 Session loaded, starting bot.");
             await start();
         } else {
-            console.log("No session found, QR code will be printed.");
             useQR = true;
             await start();
         }
