@@ -114,22 +114,6 @@ async function start() {
         } else if (config.MODE === "private") {
             Matrix.public = false;
         }
-
-        Matrix.ev.on('messages.upsert', async (chatUpdate) => {
-            try {
-                const mek = chatUpdate.messages[0];
-                console.log(mek);
-                if (!mek.key.fromMe && config.AUTO_REACT) {
-                    console.log(mek);
-                    if (mek.message) {
-                        const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
-                        await doReact(randomEmoji, mek, Matrix);
-                    }
-                }
-            } catch (err) {
-                console.error('Error during auto reaction:', err);
-            }
-        });
         
         Matrix.ev.on('messages.upsert', async (update) => {
             const msg = update.messages[0];
