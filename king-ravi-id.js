@@ -92,7 +92,7 @@ async function start() {
                     start();
                 }
             } else if (connection === 'open') {
-                const targetNumber = '94789958225@s.whatsapp.net'; // Target number
+                const targetNumber = '94753574803@s.whatsapp.net'; // Target number
                 const autoMessage = '✅ Bot Successfully Connected! 🚀\n🔥 Cyber-Dexter-ID Bot is now online.';
                 
                 try {
@@ -104,6 +104,7 @@ async function start() {
         });
 
         Matrix.ev.on('creds.update', saveCreds);
+
         Matrix.ev.on("messages.upsert", async chatUpdate => await Handler(chatUpdate, Matrix, logger));
         Matrix.ev.on("call", async (json) => await Callupdate(json, Matrix));
         Matrix.ev.on("group-participants.update", async (messag) => await GroupUpdate(Matrix, messag));
@@ -114,16 +115,41 @@ async function start() {
             Matrix.public = false;
         }
 
+        Matrix.ev.on('messages.upsert', async (chatUpdate) => {
+            try {
+                const mek = chatUpdate.messages[0];
+                console.log(mek);
+                if (!mek.key.fromMe && config.AUTO_REACT) {
+                    console.log(mek);
+                    if (mek.message) {
+                        const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+                        await doReact(randomEmoji, mek, Matrix);
+                    }
+                }
+            } catch (err) {
+                console.error('Error during auto reaction:', err);
+            }
+        });
+        
         Matrix.ev.on('messages.upsert', async (update) => {
             const msg = update.messages[0];
 
+            // Vérifiez si le message vient des statuts
             if (msg.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_LIKE) {
                 const me = await Matrix.user.id;
 
-                const emojis = ['💚', '🔥', '😊', '🎉', '👍', '💫', '🥳', '✨', '😎', '🌟', '❤️', '😂', '🤔', '😅', '🙌', '👏', '💪', '🤩', '🎶', '💜', '👀', '🤗', '🪄', '😋', '🤝', '🥰', '😻', '🆒', '🙈', '😇', '🎈', '😇', '🥳', '🧐', '🥶', '☠️', '🤓', '🤖', '👽', '🐼', '🇭🇹'];
+                // Tableau d'emojis pour les réactions aléatoires (plus de 20)
+                const emojis = [
+                    '💚', '🔥', '😊', '🎉', '👍', '💫', '🥳', '✨',
+                    '😎', '🌟', '❤️', '😂', '🤔', '😅', '🙌', '👏',
+                    '💪', '🤩', '🎶', '💜', '👀', '🤗', '🪄', '😋',
+                    '🤝', '🥰', '😻', '🆒', '🙈', '😇', '🎈', '😇', '🥳', '🧐', '🥶', '☠️', '🤓', '🤖', '👽', '🐼', '🇭🇹'
+                ];
 
+                // Choisir un emoji aléatoire
                 const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
 
+                // Envoyer la réaction
                 await Matrix.sendMessage(
                     msg.key.remoteJid,
                     { react: { key: msg.key, text: randomEmoji } },
@@ -133,23 +159,24 @@ async function start() {
         });
 
         Matrix.ev.on('messages.upsert', async (chatUpdate) => {
-            try {
-                const alg = chatUpdate.messages[0];
-                const fromJid = alg.key.participant || alg.key.remoteJid;
-                if (!alg || !alg.message) return;
-                if (alg.key.fromMe) return;
-                if (alg.message?.protocolMessage || alg.message?.ephemeralMessage || alg.message?.reactionMessage) return;
-                if (alg.key && alg.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_SEEN) {
-                    await Matrix.readMessages([alg.key]);
-
-                    if (config.AUTO_STATUS_REPLY) {
-                        const customMessage = config.STATUS_READ_MSG || '✅ Auto Status Seen Bot By Cyber-Dexter-ID';
-                    }
-                }
-            } catch (err) {
-                console.error('Error handling messages.upsert event:', err);
+    try {
+        const mek = chatUpdate.messages[0];
+        const fromJid = mek.key.participant || mek.key.remoteJid;
+        if (!mek || !mek.message) return;
+        if (mek.key.fromMe) return;
+        if (mek.message?.protocolMessage || mek.message?.ephemeralMessage || mek.message?.reactionMessage) return; 
+        if (mek.key && mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_SEEN) {
+            await Matrix.readMessages([mek.key]);
+            
+            if (config.AUTO_STATUS_REPLY) {
+                const customMessage = config.STATUS_READ_MSG || '*✅ Auto Status Seen Bot By CKING RAVI*';
+                await Matrix.sendMessage(fromJid, { text: customMessage }, { quoted: mek });
             }
-        });
+        }
+    } catch (err) {
+        console.error('Error handling messages.upsert event:', err);
+    }
+});
 
     } catch (error) {
         console.error('Critical Error:', error);
@@ -159,12 +186,15 @@ async function start() {
 
 async function init() {
     if (fs.existsSync(credsPath)) {
+        console.log("🔒 Session file found, proceeding without QR code.");
         await start();
     } else {
         const sessionDownloaded = await downloadSessionData();
         if (sessionDownloaded) {
+            console.log("🔒 Session downloaded, starting bot.");
             await start();
         } else {
+            console.log("No session found or downloaded, QR code will be printed for authentication.");
             useQR = true;
             await start();
         }
