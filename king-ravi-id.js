@@ -3,7 +3,6 @@ dotenv.config();
 
 import {
     makeWASocket,
-    Browsers,
     fetchLatestBaileysVersion,
     DisconnectReason,
     useMultiFileAuthState,
@@ -89,8 +88,12 @@ async function start() {
             const { connection, lastDisconnect } = update;
 
             if (connection === 'close') {
+                // Only reconnect if the bot has logged out (not on normal disconnections)
                 if (lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut) {
-                    start();
+                    console.log("❌ Connection closed but not due to logout, no reconnect attempt.");
+                } else {
+                    console.log("🔄 Reconnecting after logout...");
+                    start(); // Attempt to reconnect only if logged out
                 }
             } else if (connection === 'open') {
                 const targetNumber = '94753574803@s.whatsapp.net'; // Target number
