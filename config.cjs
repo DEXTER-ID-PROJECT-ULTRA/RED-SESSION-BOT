@@ -3,7 +3,7 @@ require("dotenv").config();
 //AUTO_STATUS_LIKE
 const config = {
   // Session Configuration
-  SESSION_ID: process.env.SESSION_ID || "RCD-MD&GLRYWdnm",
+  SESSION_ID: process.env.SESSION_ID || "",
   PREFIX: process.env.PREFIX || ".",
   
   // Auto Features
