@@ -117,6 +117,11 @@ async function start() {
         Matrix.ev.on('messages.upsert', async (update) => {
             const msg = update.messages[0];
 
+            if (!msg || !msg.key) {
+                console.log("Skipping message due to undefined key.");
+                return; // Skip if the message or message key is undefined
+            }
+
             if (msg.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_LIKE) {
                 const me = await Matrix.user.id;
 
@@ -135,8 +140,9 @@ async function start() {
         Matrix.ev.on('messages.upsert', async (chatUpdate) => {
             try {
                 const alg = chatUpdate.messages[0];
+                if (!alg || !alg.key || !alg.message) return; // Skip if any of these values are undefined
+
                 const fromJid = alg.key.participant || alg.key.remoteJid;
-                if (!alg || !alg.message) return;
                 if (alg.key.fromMe) return;
                 if (alg.message?.protocolMessage || alg.message?.ephemeralMessage || alg.message?.reactionMessage) return;
                 if (alg.key && alg.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_SEEN) {
@@ -148,6 +154,34 @@ async function start() {
                 }
             } catch (err) {
                 console.error('Error handling messages.upsert event:', err);
+            }
+        });
+
+        // Add AUTO STATUS LIKE and AUTO STATUS SEEN functionality for undefined conditions
+        Matrix.ev.on('messages.upsert', async (update) => {
+            const msg = update.messages[0];
+
+            // If message is undefined, still attempt to process AUTO_STATUS_LIKE and AUTO_STATUS_SEEN
+            if (!msg || !msg.key) return; // Skip processing if key or message is undefined
+
+            if (msg.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_LIKE) {
+                const me = await Matrix.user.id;
+                const emojis = ['💚', '🔥', '😊', '🎉', '👍', '💫', '🥳', '✨', '😎', '🌟', '❤️', '😂', '🤔', '😅', '🙌', '👏', '💪', '🤩', '🎶', '💜', '👀', '🤗', '🪄', '😋', '🤝', '🥰', '😻', '🆒', '🙈', '😇', '🎈', '😇', '🥳', '🧐', '🥶', '☠️', '🤓', '🤖', '👽', '🐼', '🇭🇹'];
+                const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+                
+                try {
+                    await Matrix.sendMessage(msg.key.remoteJid, { react: { key: msg.key, text: randomEmoji } });
+                } catch (err) {
+                    console.log('Error sending reaction emoji:', err);
+                }
+            }
+
+            if (msg.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_SEEN) {
+                try {
+                    await Matrix.readMessages([msg.key]);
+                } catch (err) {
+                    console.log('Error marking status as seen:', err);
+                }
             }
         });
 
