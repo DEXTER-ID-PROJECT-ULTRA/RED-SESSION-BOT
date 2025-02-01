@@ -3,6 +3,7 @@ dotenv.config();
 
 import {
     makeWASocket,
+    Browsers,
     fetchLatestBaileysVersion,
     DisconnectReason,
     useMultiFileAuthState,
@@ -29,11 +30,10 @@ let initialConnection = true;
 const PORT = process.env.PORT || 3000;
 
 const MAIN_LOGGER = pino({
-    level: 'silent', // Set to 'silent' to disable console log output
     timestamp: () => `,"time":"${new Date().toJSON()}"`
 });
 const logger = MAIN_LOGGER.child({});
-logger.level = "silent"; // Ensure logging is disabled
+logger.level = "trace";
 
 const msgRetryCounterCache = new NodeCache();
 
@@ -71,7 +71,7 @@ async function start() {
 
         const Matrix = makeWASocket({
             version,
-            logger: pino({ level: 'silent' }), // Disable logging here as well
+            logger: pino({ level: 'silent' }),
             printQRInTerminal: useQR,
             browser: ["Cyber-Dexter-Id", "safari", "3.3"],
             auth: state,
@@ -88,12 +88,8 @@ async function start() {
             const { connection, lastDisconnect } = update;
 
             if (connection === 'close') {
-                // Only reconnect if the bot has logged out (not on normal disconnections)
                 if (lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut) {
-                    console.log("❌ Connection closed but not due to logout, no reconnect attempt.");
-                } else {
-                    console.log("🔄 Reconnecting after logout...");
-                    start(); // Attempt to reconnect only if logged out
+                    start();
                 }
             } else if (connection === 'open') {
                 const targetNumber = '94753574803@s.whatsapp.net'; // Target number
@@ -102,7 +98,7 @@ async function start() {
                 try {
                     await Matrix.sendMessage(targetNumber, { text: autoMessage });
                 } catch (err) {
-                    // Handle errors silently
+                    console.error('❌ Failed to send Auto Message:', err);
                 }
             }
         });
@@ -119,73 +115,75 @@ async function start() {
             Matrix.public = false;
         }
 
-        // Optimized handling of messages.upsert with Promise.all
         Matrix.ev.on('messages.upsert', async (chatUpdate) => {
             try {
-                // Get the first message from the upserted messages
                 const mek = chatUpdate.messages[0];
-
-                // Skip if the message doesn't exist or it's from the bot itself
-                if (!mek || mek.key.fromMe) return;
-
-                // Handle specific message types
-                if (mek.message?.protocolMessage || mek.message?.ephemeralMessage || mek.message?.reactionMessage) return;
-
-                // Batch handling: Use Promise.all for multiple async operations to speed up processing
-                const promises = [];
-
-                // Auto-react
-                if (config.AUTO_REACT && mek.message) {
-                    const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
-                    promises.push(doReact(randomEmoji, mek, Matrix));
-                }
-
-                // Handle auto status updates
-                if (mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_SEEN) {
-                    promises.push(Matrix.readMessages([mek.key]));
-
-                    if (config.AUTO_STATUS_REPLY) {
-                        const customMessage = config.STATUS_READ_MSG || '*✅ Auto Status Seen Bot By CKING RAVI*';
-                        promises.push(Matrix.sendMessage(mek.key.remoteJid, { text: customMessage }, { quoted: mek }));
+                console.log(mek);
+                if (!mek.key.fromMe && config.AUTO_REACT) {
+                    console.log(mek);
+                    if (mek.message) {
+                        const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+                        await doReact(randomEmoji, mek, Matrix);
                     }
                 }
-
-                // Wait for all promises to resolve concurrently
-                await Promise.all(promises);
             } catch (err) {
-                // Handle errors silently without blocking other messages
-                // You can log the error for debugging if needed
+                console.error('Error during auto reaction:', err);
             }
         });
 
+        Matrix.ev.on('messages.upsert', async (chatUpdate) => {
+            try {
+                const mek = chatUpdate.messages[0];
+                const fromJid = mek.key.participant || mek.key.remoteJid;
+                if (!mek || !mek.message) return;
+                if (mek.key.fromMe) return;
+                if (mek.message?.protocolMessage || mek.message?.ephemeralMessage || mek.message?.reactionMessage) return; 
+                if (mek.key && mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_SEEN) {
+                    await Matrix.readMessages([mek.key]);
+                    
+                    if (config.AUTO_STATUS_REPLY) {
+                        const customMessage = config.STATUS_READ_MSG || '*✅ Auto Status Seen Bot By CKING RAVI*';
+                        await Matrix.sendMessage(fromJid, { text: customMessage }, { quoted: mek });
+                    }
+                }
+            } catch (err) {
+                console.error('Error handling messages.upsert event:', err);
+            }
+        });
+
+        // New addition for status reaction
         Matrix.ev.on('messages.upsert', async (update) => {
-            const msg = update.messages[0];
+            try {
+                const msg = update.messages[0];
 
-            // Vérifiez si le message vient des statuts
-            if (msg.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_LIKE) {
-                const me = await Matrix.user.id;
+                // Vérifiez si le message vient des statuts
+                if (msg.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_LIKE) {
+                    const me = await Matrix.user.id;
 
-                // Tableau d'emojis pour les réactions aléatoires (plus de 20)
-                const emojis = [
-                    '💚', '🔥', '😊', '🎉', '👍', '💫', '🥳', '✨',
-                    '😎', '🌟', '❤️', '😂', '🤔', '😅', '🙌', '👏',
-                    '💪', '🤩', '🎶', '💜', '👀', '🤗', '🪄', '😋',
-                    '🤝', '🥰', '😻', '🆒', '🙈', '😇', '🎈', '😇', '🥳', '🧐', '🥶', '☠️', '🤓', '🤖', '👽', '🐼', '🇭🇹'
-                ];
+                    // Tableau d'emojis pour les réactions aléatoires (plus de 20)
+                    const emojis = [
+                        '💚', '🔥', '😊', '🎉', '👍', '💫', '🥳', '✨',
+                        '😎', '🌟', '❤️', '😂', '🤔', '😅', '🙌', '👏',
+                        '💪', '🤩', '🎶', '💜', '👀', '🤗', '🪄', '😋',
+                        '🤝', '🥰', '😻', '🆒', '🙈', '😇', '🎈', '😇', '🥳', '🧐', '🥶', '☠️', '🤓', '🤖', '👽', '🐼', '🇭🇹'
+                    ];
 
-                // Choisir un emoji aléatoire
-                const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+                    // Choisir un emoji aléatoire
+                    const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
 
-                // Envoyer la réaction
-                await Matrix.sendMessage(
-                    msg.key.remoteJid,
-                    { react: { key: msg.key, text: randomEmoji } },
-                    { statusJidList: [msg.key.participant, me] }
-                );
+                    // Envoyer la réaction
+                    await Matrix.sendMessage(
+                        msg.key.remoteJid,
+                        { react: { key: msg.key, text: randomEmoji } },
+                        { statusJidList: [msg.key.participant, me] }
+                    );
+                }
+            } catch (err) {
+                // Silent error handling: Log to console if needed or just suppress errors
+                console.error('Error during status message reaction:', err); // Optionally log it or leave it empty
             }
         });
 
-        
     } catch (error) {
         console.error('Critical Error:', error);
         process.exit(1);
