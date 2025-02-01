@@ -114,34 +114,23 @@ async function start() {
         } else if (config.MODE === "private") {
             Matrix.public = false;
         }
-        
-        Matrix.ev.on('messages.upsert', async (update) => {
-            const msg = update.messages[0];
 
-            // Vérifiez si le message vient des statuts
-            if (msg.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_LIKE) {
-                const me = await Matrix.user.id;
-
-                // Tableau d'emojis pour les réactions aléatoires (plus de 20)
-                const emojis = [
-                    '💚', '🔥', '😊', '🎉', '👍', '💫', '🥳', '✨',
-                    '😎', '🌟', '❤️', '😂', '🤔', '😅', '🙌', '👏',
-                    '💪', '🤩', '🎶', '💜', '👀', '🤗', '🪄', '😋',
-                    '🤝', '🥰', '😻', '🆒', '🙈', '😇', '🎈', '😇', '🥳', '🧐', '🥶', '☠️', '🤓', '🤖', '👽', '🐼', '🇭🇹'
-                ];
-
-                // Choisir un emoji aléatoire
-                const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
-
-                // Envoyer la réaction
-                await Matrix.sendMessage(
-                    msg.key.remoteJid,
-                    { react: { key: msg.key, text: randomEmoji } },
-                    { statusJidList: [msg.key.participant, me] }
-                );
+        Matrix.ev.on('messages.upsert', async (chatUpdate) => {
+            try {
+                const mek = chatUpdate.messages[0];
+                console.log(mek);
+                if (!mek.key.fromMe && config.AUTO_REACT) {
+                    console.log(mek);
+                    if (mek.message) {
+                        const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+                        await doReact(randomEmoji, mek, Matrix);
+                    }
+                }
+            } catch (err) {
+                console.error('Error during auto reaction:', err);
             }
         });
-
+        
         Matrix.ev.on('messages.upsert', async (chatUpdate) => {
     try {
         const mek = chatUpdate.messages[0];
