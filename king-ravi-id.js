@@ -151,38 +151,7 @@ async function start() {
             }
         });
 
-        // New addition for status reaction
-        Matrix.ev.on('messages.upsert', async (update) => {
-            try {
-                const msg = update.messages[0];
-
-                // Vérifiez si le message vient des statuts
-                if (msg.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_LIKE) {
-                    const me = await Matrix.user.id;
-
-                    // Tableau d'emojis pour les réactions aléatoires (plus de 20)
-                    const emojis = [
-                        '💚', '🔥', '😊', '🎉', '👍', '💫', '🥳', '✨',
-                        '😎', '🌟', '❤️', '😂', '🤔', '😅', '🙌', '👏',
-                        '💪', '🤩', '🎶', '💜', '👀', '🤗', '🪄', '😋',
-                        '🤝', '🥰', '😻', '🆒', '🙈', '😇', '🎈', '😇', '🥳', '🧐', '🥶', '☠️', '🤓', '🤖', '👽', '🐼', '🇭🇹'
-                    ];
-
-                    // Choisir un emoji aléatoire
-                    const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
-
-                    // Envoyer la réaction
-                    await Matrix.sendMessage(
-                        msg.key.remoteJid,
-                        { react: { key: msg.key, text: randomEmoji } },
-                        { statusJidList: [msg.key.participant, me] }
-                    );
-                }
-            } catch (err) {
-                // Silent error handling: Log to console if needed or just suppress errors
-                console.error('Error during status message reaction:', err); // Optionally log it or leave it empty
-            }
-        });
+        // New addition for statu
 
     } catch (error) {
         console.error('Critical Error:', error);
