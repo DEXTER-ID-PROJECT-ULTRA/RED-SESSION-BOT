@@ -1,61 +1,51 @@
 import fetch from 'node-fetch';
-import pkg from '@whiskeysockets/baileys';  // Default import
-const { MessageType } = pkg;  // Destructure MessageType from the imported package
 
-const searchCommand = async (m, client) => {
+const pinterestdl = async (m, bot) => {
   const prefixMatch = m.body.match(/^[\\/!#.]/);
   const prefix = prefixMatch ? prefixMatch[0] : '/';
-  const [cmd, ...args] = m.body.startsWith(prefix) ? m.body.slice(prefix.length).split(' ') : ['', ''];
+  const cmd = m.body.startsWith(prefix) ? m.body.slice(prefix.length).split(' ')[0].toLowerCase() : '';
 
-  if (cmd !== 'search') return;
+  if (cmd === 'search') {
+    const args = m.body.slice(prefix.length + cmd.length).trim().split(' ');
+    const searchQuery = args.slice(0, -1).join(' ');
+    const count = parseInt(args[args.length - 1], 10) || 20;  // Default count is 20 if not provided
 
-  const query = args.slice(0, -1).join(' ');
-  const count = parseInt(args[args.length - 1], 10) || 5;
-
-  if (!query) {
-    return await client.sendMessage(m.from, `Usage: ${prefix}search <query> <count>`, MessageType.text);
-  }
-
-  const apiUrl = `https://api.davidcyriltech.my.id/search/xvideo?text=${encodeURIComponent(query)}`;
-  
-  try {
-    const response = await fetch(apiUrl);
-
-    if (!response.ok) {
-      throw new Error(`API request failed with status: ${response.status}`);
+    if (!searchQuery) {
+      return m.reply(`*Please provide a search query*\n\n\n\nExample: ${prefix}search new 20`);
     }
 
-    const data = await response.json();
+    const apiUrl = `https://api.davidcyriltech.my.id/search/xvideo?text=${encodeURIComponent(searchQuery)}`;
 
-    if (!data.success || !Array.isArray(data.result) || data.result.length === 0) {
-      return await client.sendMessage(m.from, 'No results found.', MessageType.text);
+    try {
+      m.reply('🚀 *Loading trending videos...* Please wait...');
+      const response = await fetch(apiUrl);
+      const data = await response.json();
+
+      if (!data.success || data.status !== 200) {
+        throw new Error('Failed to fetch search results.');
+      }
+
+      const videos = data.result; // Assuming this returns an array of video objects
+
+      // Limit the number of videos to the `count` specified in the command
+      const limitedVideos = videos.slice(0, count);
+
+      // Send the videos
+      for (const video of limitedVideos) {
+        const { title, duration, thumbnail, url } = video;
+
+        const message = {
+          image: { url: thumbnail },
+          caption: `*🎨 Title:* ${title}\n*⏳ Duration:* ${duration}\n*🔗 URL:* ${url}`
+        };
+
+        await bot.sendMessage(m.from, message, { quoted: m });
+      }
+    } catch (error) {
+      console.error('Error fetching search data:', error);
+      m.reply('*❌ Error fetching trending videos. Please try again later.*');
     }
-
-    for (const video of data.result.slice(0, count)) {
-      const title = video.title;
-      const duration = video.duration;
-      const url = video.url;
-      const message = video.message || 'Message not available';
-      const thumbnail = video.thumbnail;
-
-      // Download the image from the thumbnail URL
-      const media = await client.downloadMediaMessage({ url: thumbnail });
-
-      const responseMessage = `
-        🎥 *${title}*
-        ⏳ Duration: ${duration}
-        🔗 [Watch Here](${url})
-        
-        Message: ${message}
-      `;
-
-      // Send the image with the caption
-      await client.sendMessage(m.from, media, MessageType.image, { caption: responseMessage });
-    }
-  } catch (error) {
-    console.error('Error occurred:', error.message);
-    await client.sendMessage(m.from, 'There was an error fetching the data. Please try again later.', MessageType.text);
   }
 };
 
-export default searchCommand;
+export default pinterestdl;
