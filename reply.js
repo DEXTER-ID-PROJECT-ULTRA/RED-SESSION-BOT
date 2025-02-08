@@ -83,7 +83,7 @@ const Handler = async (chatUpdate, sock, logger) => {
             await sendPresence(sock, m.sender);
         }
 
-        const pluginDir = path.join(__dirname, '.', 'command');
+        const pluginDir = path.join(__dirname, '.', 'command);
         const pluginFiles = await fs.readdir(pluginDir);
 
         for (const file of pluginFiles) {
