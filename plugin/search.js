@@ -19,10 +19,16 @@ const pinterestdl = async (m, bot) => {
     try {
       m.reply('🚀 *Loading trending videos...* Please wait...');
       const response = await fetch(apiUrl);
+      
+      // Check if the response is ok (status code 200)
+      if (!response.ok) {
+        throw new Error(`API responded with status: ${response.status}`);
+      }
+
       const data = await response.json();
 
       if (!data.success || data.status !== 200) {
-        throw new Error('Failed to fetch search results.');
+        throw new Error(`API response error: ${data.message || 'Unknown error'}`);
       }
 
       const videos = data.result; // Assuming this returns an array of video objects
@@ -43,7 +49,7 @@ const pinterestdl = async (m, bot) => {
       }
     } catch (error) {
       console.error('Error fetching search data:', error);
-      m.reply('*❌ Error fetching trending videos. Please try again later.*');
+      m.reply(`*❌ Error fetching trending videos. Details: ${error.message}*`);
     }
   }
 };
