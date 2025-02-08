@@ -1,5 +1,6 @@
 import fetch from 'node-fetch';
-import { MessageType } from '@whiskeysockets/baileys'; // Ensure the correct import
+import pkg from '@whiskeysockets/baileys';  // Default import
+const { MessageType } = pkg;  // Destructure MessageType from the imported package
 
 const searchCommand = async (m, client) => {
   const prefixMatch = m.body.match(/^[\\/!#.]/);
