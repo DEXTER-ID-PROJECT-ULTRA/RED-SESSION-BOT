@@ -27,7 +27,7 @@ const PORT = process.env.PORT || 3000;
 let useQR = false;
 
 const logger = pino({ level: 'silent' });
-const msgRetryCounterCache = new NodeCache();
+const msgRetryCounterCache = new NodeCache({ stdTTL: 60, checkperiod: 120 });
 const __dirname = path.dirname(new URL(import.meta.url).pathname);
 const sessionDir = path.join(__dirname, 'session');
 const credsPath = path.join(sessionDir, 'creds.json');
@@ -69,9 +69,10 @@ async function start() {
             const { connection, lastDisconnect } = update;
 
             if (connection === 'close') {
-                if (lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut) {
-                    console.log("🔄 Reconnecting...");
-                    start();
+                const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
+                if (shouldReconnect) {
+                    console.log("🔄 Attempting to reconnect in 10 seconds...");
+                    setTimeout(() => start(), 10000);
                 } else {
                     console.log("🚫 Logged out! Delete session and scan again.");
                 }
