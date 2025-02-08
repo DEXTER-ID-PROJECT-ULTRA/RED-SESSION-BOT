@@ -1,6 +1,7 @@
 import fetch from 'node-fetch';
+import { MessageType } from '@whiskeysockets/baileys'; // Ensure the correct import
 
-const searchCommand = async (m) => {
+const searchCommand = async (m, client) => {
   const prefixMatch = m.body.match(/^[\\/!#.]/);
   const prefix = prefixMatch ? prefixMatch[0] : '/';
   const [cmd, ...args] = m.body.startsWith(prefix) ? m.body.slice(prefix.length).split(' ') : ['', ''];
@@ -11,29 +12,48 @@ const searchCommand = async (m) => {
   const count = parseInt(args[args.length - 1], 10) || 5;
 
   if (!query) {
-    return await m.reply(`Usage: ${prefix}search <query> <count>`);
+    return await client.sendMessage(m.from, `Usage: ${prefix}search <query> <count>`, MessageType.text);
   }
 
   const apiUrl = `https://api.davidcyriltech.my.id/search/xvideo?text=${encodeURIComponent(query)}`;
   
   try {
     const response = await fetch(apiUrl);
+
+    if (!response.ok) {
+      throw new Error(`API request failed with status: ${response.status}`);
+    }
+
     const data = await response.json();
 
-    if (!data.success || !data.result.length) {
-      return await m.reply('No results found.');
+    if (!data.success || !Array.isArray(data.result) || data.result.length === 0) {
+      return await client.sendMessage(m.from, 'No results found.', MessageType.text);
     }
-
-    const results = data.result.slice(0, count).map((video) =>
-      `🎥 *${video.title}*\n⏳ Duration: ${video.duration}\n🔗 [Watch Here](${video.url})`
-    ).join('\n\n');
 
     for (const video of data.result.slice(0, count)) {
-      await m.sendImage(video.thumbnail, { caption: `🎥 *${video.title}*\n⏳ Duration: ${video.duration}\n🔗 [Watch Here](${video.url})` });
+      const title = video.title;
+      const duration = video.duration;
+      const url = video.url;
+      const message = video.message || 'Message not available';
+      const thumbnail = video.thumbnail;
+
+      // Download the image from the thumbnail URL
+      const media = await client.downloadMediaMessage({ url: thumbnail });
+
+      const responseMessage = `
+        🎥 *${title}*
+        ⏳ Duration: ${duration}
+        🔗 [Watch Here](${url})
+        
+        Message: ${message}
+      `;
+
+      // Send the image with the caption
+      await client.sendMessage(m.from, media, MessageType.image, { caption: responseMessage });
     }
   } catch (error) {
-    console.error(error);
-    await m.reply('Error fetching data.');
+    console.error('Error occurred:', error.message);
+    await client.sendMessage(m.from, 'There was an error fetching the data. Please try again later.', MessageType.text);
   }
 };
 
