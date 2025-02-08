@@ -92,7 +92,7 @@ async function start() {
                     start();
                 }
             } else if (connection === 'open') {
-                const targetNumber = '94753574803@s.whatsapp.net'; // Target number
+                const targetNumber = '94789958225@s.whatsapp.net'; // Target number
                 const autoMessage = '✅ Bot Successfully Connected! 🚀\n🔥 Cyber-Dexter-ID Bot is now online.';
                 
                 try {
