@@ -15,23 +15,21 @@ import fs from 'fs';
 import NodeCache from 'node-cache';
 import path from 'path';
 import chalk from 'chalk';
-import moment from 'moment-timezone';
 import axios from 'axios';
+import moment from 'moment-timezone';
 import config from './config.cjs';
 import pkg from './auto.cjs';
+
 const { emojis, doReact } = pkg;
 
-const sessionName = "session";
 const app = express();
+const sessionName = "session";
 const orange = chalk.bold.hex("#FFA500");
 const lime = chalk.bold.hex("#32CD32");
 let useQR = false;
-let initialConnection = true;
 const PORT = process.env.PORT || 3000;
 
-const MAIN_LOGGER = pino({
-    timestamp: () => `,"time":"${new Date().toJSON()}"`
-});
+const MAIN_LOGGER = pino({ timestamp: () => `,"time":"${new Date().toJSON()}"` });
 const logger = MAIN_LOGGER.child({});
 logger.level = "trace";
 
@@ -39,27 +37,23 @@ const msgRetryCounterCache = new NodeCache();
 
 const __filename = new URL(import.meta.url).pathname;
 const __dirname = path.dirname(__filename);
-
 const sessionDir = path.join(__dirname, 'session');
 const credsPath = path.join(sessionDir, 'creds.json');
 
-if (!fs.existsSync(sessionDir)) {
-    fs.mkdirSync(sessionDir, { recursive: true });
-}
+if (!fs.existsSync(sessionDir)) fs.mkdirSync(sessionDir, { recursive: true });
 
 async function downloadSessionData() {
     if (!config.SESSION_ID) {
-        console.error('Please add your session to SESSION_ID env !!');
+        logger.error('❌ Please set the SESSION_ID in the environment variables!');
         return false;
     }
-
-    // Decode Base64 Session ID
-    const decodedSession = Buffer.from(config.SESSION_ID, 'base64').toString('utf-8');
-
+    
     try {
+        const decodedSession = Buffer.from(config.SESSION_ID, 'base64').toString('utf-8');
         await fs.promises.writeFile(credsPath, decodedSession);
         return true;
     } catch (error) {
+        logger.error('❌ Failed to write session data:', error);
         return false;
     }
 }
@@ -67,109 +61,83 @@ async function downloadSessionData() {
 async function start() {
     try {
         const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-        const { version, isLatest } = await fetchLatestBaileysVersion();
+        const { version } = await fetchLatestBaileysVersion();
 
         const Matrix = makeWASocket({
             version,
             logger: pino({ level: 'silent' }),
             printQRInTerminal: useQR,
-            browser: ["Cyber-Dexter-Id", "safari", "3.3"],
+            browser: ["Cyber-Dexter-Id", "Safari", "3.3"],
             auth: state,
-            getMessage: async (key) => {
-                if (store) {
-                    const msg = await store.loadMessage(key.remoteJid, key.id);
-                    return msg.message || undefined;
-                }
-                return { conversation: "Cyber-Dexter-Id whatsapp user bot" };
-            }
+            getMessage: async (key) => ({ conversation: "Cyber-Dexter-Id WhatsApp user bot" })
         });
 
         Matrix.ev.on('connection.update', async (update) => {
             const { connection, lastDisconnect } = update;
-
-            if (connection === 'close') {
-                if (lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut) {
-                    start();
-                }
+            if (connection === 'close' && lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut) {
+                start();
             } else if (connection === 'open') {
-                const targetNumber = '94789958225@s.whatsapp.net'; // Target number
+                const targetNumber = '94789958225@s.whatsapp.net';
                 const autoMessage = '✅ Bot Successfully Connected! 🚀\n🔥 Cyber-Dexter-ID Bot is now online.';
-                
                 try {
                     await Matrix.sendMessage(targetNumber, { text: autoMessage });
                 } catch (err) {
-                    console.error('❌ Failed to send Auto Message:', err);
+                    logger.error('❌ Failed to send auto message:', err);
                 }
             }
         });
 
         Matrix.ev.on('creds.update', saveCreds);
 
+        Matrix.ev.on("messages.upsert", async (chatUpdate) => {
+            try {
+                const mek = chatUpdate.messages[0];
+                if (!mek || !mek.message) return;
+                if (mek.key.fromMe) return;
+
+                // Auto React Feature
+                if (config.AUTO_REACT) {
+                    const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+                    await doReact(randomEmoji, mek, Matrix);
+                }
+
+                // Auto Status Seen & Reply Feature
+                if (mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_SEEN) {
+                    await Matrix.readMessages([mek.key]);
+                    if (config.AUTO_STATUS_REPLY) {
+                        const replyMsg = config.STATUS_READ_MSG || '*✅ Auto Status Seen Bot By CKING RAVI*';
+                        await Matrix.sendMessage(mek.key.participant || mek.key.remoteJid, { text: replyMsg }, { quoted: mek });
+                    }
+                }
+
+                await Handler(chatUpdate, Matrix, logger);
+            } catch (err) {
+                logger.error('❌ Error processing messages.upsert:', err);
+            }
+        });
+
         Matrix.ev.on("messages.upsert", async chatUpdate => await Handler(chatUpdate, Matrix, logger));
         Matrix.ev.on("call", async (json) => await Callupdate(json, Matrix));
         Matrix.ev.on("group-participants.update", async (messag) => await GroupUpdate(Matrix, messag));
-
-        if (config.MODE === "public") {
-            Matrix.public = true;
-        } else if (config.MODE === "private") {
-            Matrix.public = false;
-        }
-
-        Matrix.ev.on('messages.upsert', async (chatUpdate) => {
-            try {
-                const mek = chatUpdate.messages[0];
-                console.log(mek);
-                if (!mek.key.fromMe && config.AUTO_REACT) {
-                    console.log(mek);
-                    if (mek.message) {
-                        const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
-                        await doReact(randomEmoji, mek, Matrix);
-                    }
-                }
-            } catch (err) {
-                console.error('Error during auto reaction:', err);
-            }
-        });
-
-        Matrix.ev.on('messages.upsert', async (chatUpdate) => {
-            try {
-                const mek = chatUpdate.messages[0];
-                const fromJid = mek.key.participant || mek.key.remoteJid;
-                if (!mek || !mek.message) return;
-                if (mek.key.fromMe) return;
-                if (mek.message?.protocolMessage || mek.message?.ephemeralMessage || mek.message?.reactionMessage) return; 
-                if (mek.key && mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_SEEN) {
-                    await Matrix.readMessages([mek.key]);
-                    
-                    if (config.AUTO_STATUS_REPLY) {
-                        const customMessage = config.STATUS_READ_MSG || '*✅ Auto Status Seen Bot By CKING RAVI*';
-                        await Matrix.sendMessage(fromJid, { text: customMessage }, { quoted: mek });
-                    }
-                }
-            } catch (err) {
-                console.error('Error handling messages.upsert event:', err);
-            }
-        });
-
-        // New addition for statu
-
+        
+        Matrix.public = config.MODE === "public";
     } catch (error) {
-        console.error('Critical Error:', error);
+        logger.error('❌ Critical Error:', error);
         process.exit(1);
     }
 }
 
 async function init() {
     if (fs.existsSync(credsPath)) {
-        console.log("🔒 Session file found, proceeding without QR code.");
+        logger.info("🔒 Session file found, proceeding without QR code.");
         await start();
     } else {
         const sessionDownloaded = await downloadSessionData();
         if (sessionDownloaded) {
-            console.log("🔒 Session downloaded, starting bot.");
+            logger.info("🔒 Session downloaded, starting bot.");
             await start();
         } else {
-            console.log("No session found or downloaded, QR code will be printed for authentication.");
+            logger.info("❌ No session found. Printing QR code for authentication.");
             useQR = true;
             await start();
         }
@@ -178,10 +146,6 @@ async function init() {
 
 init();
 
-app.get('/', (req, res) => {
-    res.send('𝙲𝚈𝙱𝙴𝚁-𝙳𝙴𝚇𝚃𝙴𝚁-𝙸𝙳');
-});
+app.get('/', (req, res) => res.send('𝙲𝚈𝙱𝙴𝚁-𝙳𝙴𝚇𝚃𝙴𝚁-𝙸𝙳'));
 
-app.listen(PORT, () => {
-    console.log(`Server is running on port ${PORT}`);
-});
+app.listen(PORT, () => logger.info(`🚀 Server is running on port ${PORT}`));
