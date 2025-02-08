@@ -19,16 +19,27 @@ import moment from 'moment-timezone';
 import axios from 'axios';
 import config from './config.cjs';
 import pkg from './auto.cjs';
-
 const { emojis, doReact } = pkg;
+
 const sessionName = "session";
 const app = express();
-const PORT = process.env.PORT || 3000;
+const orange = chalk.bold.hex("#FFA500");
+const lime = chalk.bold.hex("#32CD32");
 let useQR = false;
+let initialConnection = true;
+const PORT = process.env.PORT || 3000;
 
-const logger = pino({ level: 'silent' });
-const msgRetryCounterCache = new NodeCache({ stdTTL: 60, checkperiod: 120 });
-const __dirname = path.dirname(new URL(import.meta.url).pathname);
+const MAIN_LOGGER = pino({
+    timestamp: () => `,"time":"${new Date().toJSON()}"`
+});
+const logger = MAIN_LOGGER.child({});
+logger.level = "trace";
+
+const msgRetryCounterCache = new NodeCache();
+
+const __filename = new URL(import.meta.url).pathname;
+const __dirname = path.dirname(__filename);
+
 const sessionDir = path.join(__dirname, 'session');
 const credsPath = path.join(sessionDir, 'creds.json');
 
@@ -41,12 +52,16 @@ async function downloadSessionData() {
         console.error('Please add your session to SESSION_ID env !!');
         return false;
     }
-
+    const sessdata = config.SESSION_ID.split("RCD-MD&")[1];
+    const url = `https://pastebin.com/raw/${sessdata}`;
     try {
-        await fs.promises.writeFile(credsPath, Buffer.from(config.SESSION_ID, 'base64').toString('utf-8'));
+        const response = await axios.get(url);
+        const data = typeof response.data === 'string' ? response.data : JSON.stringify(response.data);
+        await fs.promises.writeFile(credsPath, data);
+        console.log("🔒 Session Successfully Loaded !!");
         return true;
     } catch (error) {
-        console.error("❌ Failed to save session file:", error);
+       // console.error('Failed to download session data:', error);
         return false;
     }
 }
@@ -54,70 +69,91 @@ async function downloadSessionData() {
 async function start() {
     try {
         const { state, saveCreds } = await useMultiFileAuthState(sessionDir);
-        const { version } = await fetchLatestBaileysVersion();
-
+        const { version, isLatest } = await fetchLatestBaileysVersion();
+        console.log(`🤖 Ethix-MD using WA v${version.join('.')}, isLatest: ${isLatest}`);
+        
         const Matrix = makeWASocket({
             version,
-            logger,
+            logger: pino({ level: 'silent' }),
             printQRInTerminal: useQR,
-            browser: ["Cyber-Dexter-ID", "safari", "3.3"],
+            browser: ["Ethix-MD", "safari", "3.3"],
             auth: state,
-            msgRetryCounterCache,
+            getMessage: async (key) => {
+                if (store) {
+                    const msg = await store.loadMessage(key.remoteJid, key.id);
+                    return msg.message || undefined;
+                }
+                return { conversation: "Ethix-MD whatsapp user bot" };
+            }
         });
 
-        Matrix.ev.on('connection.update', async (update) => {
+        Matrix.ev.on('connection.update', (update) => {
             const { connection, lastDisconnect } = update;
-
             if (connection === 'close') {
-                const shouldReconnect = lastDisconnect?.error?.output?.statusCode !== DisconnectReason.loggedOut;
-                if (shouldReconnect) {
-                    console.log("🔄 Attempting to reconnect in 10 seconds...");
-                    setTimeout(() => start(), 10000);
-                } else {
-                    console.log("🚫 Logged out! Delete session and scan again.");
+                if (lastDisconnect.error?.output?.statusCode !== DisconnectReason.loggedOut) {
+                    start();
                 }
             } else if (connection === 'open') {
-                console.log("✅ Bot Connected!");
-                const autoMessage = '✅ Bot Successfully Connected! 🚀\n🔥 Cyber-Dexter-ID Bot is now online.';
-                try {
-                    await Matrix.sendMessage('94789958225@s.whatsapp.net', { text: autoMessage });
-                } catch (err) {
-                    console.error('❌ Failed to send Auto Message:', err);
+                if (initialConnection) {
+                    console.log(chalk.green("😃 Integration Successful️ ✅"));
+                    Matrix.sendMessage(Matrix.user.id, { text: `😃 Integration Successful️ ✅` });
+                    initialConnection = false;
+                } else {
+                    console.log(chalk.blue("♻️ Connection reestablished after restart."));
                 }
             }
         });
 
         Matrix.ev.on('creds.update', saveCreds);
+
         Matrix.ev.on("messages.upsert", async chatUpdate => await Handler(chatUpdate, Matrix, logger));
         Matrix.ev.on("call", async (json) => await Callupdate(json, Matrix));
         Matrix.ev.on("group-participants.update", async (messag) => await GroupUpdate(Matrix, messag));
 
+        if (config.MODE === "public") {
+            Matrix.public = true;
+        } else if (config.MODE === "private") {
+            Matrix.public = false;
+        }
+
         Matrix.ev.on('messages.upsert', async (chatUpdate) => {
             try {
                 const mek = chatUpdate.messages[0];
-                if (!mek || !mek.message) return;
-                if (mek.key.fromMe) return;
-
-                if (config.AUTO_REACT) {
-                    const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
-                    await doReact(randomEmoji, mek, Matrix);
-                }
-
-                if (mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_SEEN) {
-                    await Matrix.readMessages([mek.key]);
-
-                    if (config.AUTO_STATUS_REPLY) {
-                        const customMessage = config.STATUS_READ_MSG || '*✅ Auto Status Seen Bot By CKING RAVI*';
-                        await Matrix.sendMessage(mek.key.remoteJid, { text: customMessage }, { quoted: mek });
+                console.log(mek);
+                if (!mek.key.fromMe && config.AUTO_REACT) {
+                    console.log(mek);
+                    if (mek.message) {
+                        const randomEmoji = emojis[Math.floor(Math.random() * emojis.length)];
+                        await doReact(randomEmoji, mek, Matrix);
                     }
                 }
             } catch (err) {
-                console.error('❌ Error in messages.upsert:', err);
+                console.error('Error during auto reaction:', err);
             }
         });
+        
+        Matrix.ev.on('messages.upsert', async (chatUpdate) => {
+    try {
+        const mek = chatUpdate.messages[0];
+        const fromJid = mek.key.participant || mek.key.remoteJid;
+        if (!mek || !mek.message) return;
+        if (mek.key.fromMe) return;
+        if (mek.message?.protocolMessage || mek.message?.ephemeralMessage || mek.message?.reactionMessage) return; 
+        if (mek.key && mek.key.remoteJid === 'status@broadcast' && config.AUTO_STATUS_SEEN) {
+            await Matrix.readMessages([mek.key]);
+            
+            if (config.AUTO_STATUS_REPLY) {
+                const customMessage = config.STATUS_READ_MSG || '*✅ Auto Status Seen Bot By DEXTER*';
+                await Matrix.sendMessage(fromJid, { text: customMessage }, { quoted: mek });
+            }
+        }
+    } catch (err) {
+        console.error('Error handling messages.upsert event:', err);
+    }
+});
 
     } catch (error) {
-        console.error('❌ Critical Error:', error);
+        console.error('Critical Error:', error);
         process.exit(1);
     }
 }
@@ -142,9 +178,9 @@ async function init() {
 init();
 
 app.get('/', (req, res) => {
-    res.send('𝙲𝚈𝙱𝙴𝚁-𝙳𝙴𝚇𝚃𝙴𝚁-𝙸𝙳 is Online!');
+    res.send('Hello World!');
 });
 
 app.listen(PORT, () => {
-    console.log(`🌍 Server running on port ${PORT}`);
+    console.log(`Server is running on port ${PORT}`);
 });
